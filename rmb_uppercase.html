@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人民币金额大小写转换</title>
+<link rel="stylesheet" href="assets/nav.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 48px;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    background: #f5f6f8; color: #333;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 22px 16px 0; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .sub { margin: 0 0 18px; color: #777; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 14px; }
+  .card {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px 16px;
+  }
+  .card h2 {
+    font-size: 14px; margin: 0 0 10px; color: #1a56b0;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .card h2 .count { color: #999; font-weight: normal; font-size: 12px; }
+  .field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .field > span { flex: 0 0 84px; color: #666; }
+  .field input[type="text"], .field select {
+    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 9px;
+    border: 1px solid #c5ccd6; border-radius: 6px; background: #fff; color: #333;
+  }
+  textarea {
+    width: 100%; min-height: 72px; resize: vertical; font: inherit; font-size: 13px;
+    padding: 9px 11px; border: 1px solid #c5ccd6; border-radius: 6px;
+    font-family: Consolas, "Microsoft YaHei", monospace; line-height: 1.55;
+  }
+  textarea:focus, input:focus, select:focus { outline: 2px solid #cfe0f7; border-color: #4a90d9; }
+  #upperOut {
+    background: #f0f9f0; border-color: #d8ecd8;
+    font-size: 17px; font-weight: bold; color: #1d6b32; min-height: 82px;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+  button {
+    font: inherit; font-size: 13px; padding: 5px 14px; border-radius: 6px;
+    border: 1px solid #c5ccd6; background: #fff; color: #333; cursor: pointer;
+  }
+  button:hover { background: #f0f3f7; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+  .quick button { font-size: 12px; padding: 3px 10px; color: #1a56b0; border-color: #d6e2f5; background: #f8fbff; }
+  .quick button:hover { background: #eaf1fe; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; margin-bottom: 8px; }
+  .opts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .hint { color: #999; font-size: 12px; margin-top: 6px; line-height: 1.7; }
+  .lower-result {
+    min-height: 34px; padding: 8px 10px; border-radius: 6px; background: #f6f9fe;
+    border: 1px solid #dce8f8; font-size: 15px; font-weight: bold; color: #1a56b0;
+    word-break: break-all;
+  }
+  .lower-result.err { color: #b42318; background: #fff5f4; border-color: #ffd6d0; font-weight: normal; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; line-height: 1.6; }
+  th, td { border: 1px solid #e8ebf0; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #f6f9fe; color: #1a56b0; font-weight: 600; white-space: nowrap; }
+  td.k { white-space: nowrap; color: #555; }
+  ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.85; color: #555; }
+  ul li + li { margin-top: 3px; }
+  code { font-family: Consolas, monospace; background: #f4f6fa; padding: 1px 4px; border-radius: 4px; color: #1a56b0; }
+  @media (max-width: 820px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>人民币金额大小写转换</h1>
+  <p class="sub">小写金额与人民币大写互转，写合同、支票、报销单直接复制。全部在本地浏览器完成，数据不出机器。</p>
+
+  <div class="grid">
+    <div class="col">
+      <section class="card">
+        <h2>1. 小写金额 → 大写</h2>
+        <div class="field">
+          <span>金额</span>
+          <input type="text" id="amount" placeholder="例如 1234567.89，可带 ¥ 和逗号" autocomplete="off">
+        </div>
+        <div class="quick" id="quick">
+          <button type="button" data-v="0">0</button>
+          <button type="button" data-v="100">100</button>
+          <button type="button" data-v="1001.01">1001.01</button>
+          <button type="button" data-v="12345.6">12345.6</button>
+          <button type="button" data-v="1234567.89">1234567.89</button>
+          <button type="button" data-v="100000001">100000001</button>
+        </div>
+        <div class="opts">
+          <label><input type="checkbox" id="addPrefix">加「人民币」前缀</label>
+          <label><input type="checkbox" id="ceilMode">第三位小数向上进一分</label>
+        </div>
+        <div class="field">
+          <span>结尾字</span>
+          <select id="tailWord">
+            <option value="整">整（票据常用）</option>
+            <option value="正">正（可替代）</option>
+            <option value="">不加（有角无分时）</option>
+          </select>
+        </div>
+        <div class="hint">支持 <code>¥1,234.56</code> 这类写法；默认按角、分精确转换（第三位小数忽略）。勾选「第三位小数向上进一分」后，第三位及以上有非零数字时向上进到分。</div>
+      </section>
+
+      <section class="card">
+        <h2>2. 大写结果<span class="count" id="upperInfo"></span></h2>
+        <div class="btns">
+          <button id="copyUpper" type="button">复制大写</button>
+          <button id="clearAmount" type="button">清空</button>
+        </div>
+        <textarea id="upperOut" readonly placeholder="输入小写金额后，大写结果会实时出现在这里"></textarea>
+        <div class="hint" id="amountEcho">—</div>
+      </section>
+
+      <section class="card">
+        <h2>3. 大写 → 小写（反向核对）</h2>
+        <div class="field">
+          <span>大写金额</span>
+          <input type="text" id="upperInput" placeholder="例如 壹佰贰拾叁万肆仟伍佰陆拾柒元捌角玖分" autocomplete="off">
+        </div>
+        <div class="btns">
+          <button id="toLowerBtn" type="button">转成小写</button>
+          <button id="copyLower" type="button">复制小写</button>
+        </div>
+        <div class="lower-result" id="lowerOut">等待输入大写金额…</div>
+        <div class="hint">可识别「人民币 / 负 / 整 / 正 / 圆」等常见写法，并支持 <code>零壹贰叁肆伍陆柒捌玖</code>。</div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <h2>大写数字对照</h2>
+        <table>
+          <tr><th style="width:46px">小写</th><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td></tr>
+          <tr><th>大写</th><td>零</td><td>壹</td><td>贰</td><td>叁</td><td>肆</td><td>伍</td><td>陆</td><td>柒</td><td>捌</td><td>玖</td></tr>
+        </table>
+        <div class="hint">数位单位：<code>拾 · 佰 · 仟 · 万 · 亿 · 兆</code>。不得用「一二三四」或阿拉伯数字代替大写数字。</div>
+      </section>
+
+      <section class="card">
+        <h2>大小写书写规范</h2>
+        <table>
+          <tr><th style="width:104px">场景</th><th>写法要求</th></tr>
+          <tr><td class="k">基本格式</td><td>金额前冠以「人民币」，大写数字紧接「元」，不留空格；如「人民币壹佰元整」。</td></tr>
+          <tr><td class="k">无角无分</td><td>「元」后写「整」或「正」，如「人民币壹佰元整」。</td></tr>
+          <tr><td class="k">有角无分</td><td>「角」后可写「整」，也可以不写；本工具默认写成「壹佰元伍角整」。</td></tr>
+          <tr><td class="k">无角有分</td><td>「元」后补一个「零」，再写分，如「壹佰元零伍分」。</td></tr>
+          <tr><td class="k">角分齐全</td><td>「分」后不写「整」，如「壹佰元伍角陆分」。</td></tr>
+          <tr><td class="k">中间的零</td><td>连续的几个「零」只写一个；万、亿跨节时按节读，如 <code>100010000</code> → 「壹亿零壹万元整」。</td></tr>
+          <tr><td class="k">票据一致性</td><td>《票据法》规定金额须以中文大写和数码同时记载，二者必须一致，不一致的票据无效。</td></tr>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>人民币常识</h2>
+        <ul>
+          <li>人民币主币单位为<strong>元</strong>，辅币单位为<strong>角、分</strong>；1 元 = 10 角 = 100 分。账面、票据金额仍要求精确到分。</li>
+          <li>货币符号 <code>¥</code>，ISO 4217 代码 <code>CNY</code>，由中国人民银行发行管理。</li>
+          <li>第五套人民币纸币面额为 1、5、10、20、50、100 元；硬币有 1 角、5 角和 1 元。</li>
+          <li>大写金额笔画复杂、不易涂改，因此用于支票、汇票、合同、发票、借款单等正式凭证，防止金额被篡改。</li>
+          <li>票据出票日期也要求大写：月为壹、贰、壹拾，日为壹至玖、壹拾、贰拾、叁拾的，前面要加「零」，如「零壹月零伍日」。</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var DIGITS = '零壹贰叁肆伍陆柒捌玖';
+  var SMALL_UNITS = ['', '拾', '佰', '仟'];
+  var BIG_UNITS = ['', '万', '亿', '兆', '京'];
+  var UP_DIGIT = {
+    '零': 0, '〇': 0, '○': 0, '壹': 1, '贰': 2, '叁': 3, '肆': 4,
+    '伍': 5, '陆': 6, '柒': 7, '捌': 8, '玖': 9,
+    '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9
+  };
+
+  function addOne(str) {
+    var a = str.split(''), carry = 1;
+    for (var i = a.length - 1; i >= 0 && carry; i--) {
+      var d = Number(a[i]);
+      if (d === 9) { a[i] = '0'; } else { a[i] = String(d + 1); carry = 0; }
+    }
+    return (carry ? '1' : '') + a.join('');
+  }
+
+  // 解析小写金额；第三位小数非零时按向上取整进到分，全程用字符串避免浮点误差
+  function parseAmount(raw, ceilMode) {
+    var s = String(raw || '').replace(/[¥￥,\s]/g, '').trim();
+    if (!s) return null;
+    var neg = false;
+    if (s.charAt(0) === '-' || s.charAt(0) === '−') { neg = true; s = s.slice(1); }
+    if (!/^\d+(\.\d+)?$/.test(s)) return null;
+
+    var parts = s.split('.');
+    var intStr = parts[0].replace(/^0+(?=\d)/, '');
+    var dec = parts[1] || '';
+    var jiao = dec.length > 0 ? Number(dec.charAt(0)) : 0;
+    var fen = dec.length > 1 ? Number(dec.charAt(1)) : 0;
+
+    if (ceilMode && /[1-9]/.test(dec.slice(2))) {
+      fen += 1;
+      if (fen > 9) {
+        fen = 0; jiao += 1;
+        if (jiao > 9) { jiao = 0; intStr = addOne(intStr); }
+      }
+    }
+    return { neg: neg, intStr: intStr, jiao: jiao, fen: fen };
+  }
+
+  // 四位一节：0000 ~ 9999 → 中文
+  function sectionCN(sec) {
+    var out = '', zero = false;
+    for (var i = 0; i < sec.length; i++) {
+      var d = Number(sec.charAt(i));
+      var u = sec.length - 1 - i;
+      if (d === 0) {
+        if (out) zero = true;
+      } else {
+        if (zero) { out += '零'; zero = false; }
+        out += DIGITS.charAt(d) + SMALL_UNITS[u];
+      }
+    }
+    return out;
+  }
+
+  // 整数部分 → 中文（处理连续零、万/亿跨节）
+  function integerCN(intStr) {
+    intStr = intStr.replace(/^0+(?=\d)/, '');
+    if (!intStr || intStr === '0') return '';
+    var secs = [];
+    while (intStr.length) { secs.unshift(intStr.slice(-4)); intStr = intStr.slice(0, -4); }
+
+    var out = '';
+    for (var i = 0; i < secs.length; i++) {
+      var cn = sectionCN(secs[i]);
+      var unit = BIG_UNITS[secs.length - 1 - i] || '';
+      if (cn) {
+        if (out && Number(secs[i]) < 1000 && out.slice(-1) !== '零') out += '零';
+        out += cn + unit;
+      } else if (out && out.slice(-1) !== '零') {
+        out += '零';
+      }
+    }
+    return out.replace(/零+$/, '');
+  }
+
+  function toUpper(raw, prefix, tail, ceilMode) {
+    var p = parseAmount(raw, ceilMode);
+    if (!p) return null;
+
+    var n = integerCN(p.intStr) || '零';
+    var out = (prefix ? '人民币' : '') + (p.neg ? '负' : '') + n + '元';
+
+    if (p.jiao === 0 && p.fen === 0) {
+      out += tail || '';
+    } else {
+      out += p.jiao > 0 ? DIGITS.charAt(p.jiao) + '角' : '零';
+      out += p.fen > 0 ? DIGITS.charAt(p.fen) + '分' : (tail || '');
+    }
+    return {
+      text: out,
+      echo: (p.neg ? '-' : '') + p.intStr + '.' + String(p.jiao) + String(p.fen) + ' 元'
+    };
+  }
+
+  // 大写 → 小写：逐字扫，拾佰仟进节，万亿入账，元角分收尾
+  function toLower(raw) {
+    var neg = /负/.test(String(raw || ''));
+    var s = String(raw || '').replace(/[\s,，]/g, '').replace(/人民币|负|整|正/g, '');
+    if (!s) return null;
+
+    var total = 0, section = 0, num = 0, jiao = 0, fen = 0, seen = false;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (Object.prototype.hasOwnProperty.call(UP_DIGIT, ch)) {
+        num = UP_DIGIT[ch]; seen = true; continue;
+      }
+      if (ch === '拾' || ch === '佰' || ch === '仟') {
+        var uv = ch === '拾' ? 10 : (ch === '佰' ? 100 : 1000);
+        section += (num || 1) * uv;   // 如「拾元」按壹拾处理
+        num = 0; seen = true; continue;
+      }
+      if (ch === '万' || ch === '亿' || ch === '兆') {
+        section += num; num = 0;
+        total += section * (ch === '万' ? 1e4 : (ch === '亿' ? 1e8 : 1e12));
+        section = 0; seen = true; continue;
+      }
+      if (ch === '元' || ch === '圆') {
+        section += num; total += section; section = 0; num = 0; seen = true; continue;
+      }
+      if (ch === '角') { jiao = num; num = 0; seen = true; continue; }
+      if (ch === '分') { fen = num; num = 0; seen = true; continue; }
+      return null;   // 出现无法识别的字符
+    }
+    if (!seen) return null;
+    section += num;
+    total += section;
+    var cents = Math.round(total * 100) + jiao * 10 + fen;
+    return (neg ? '-' : '') + (cents / 100).toFixed(2) + ' 元';
+  }
+
+  var amountEl = $('amount');
+  var upperOut = $('upperOut');
+  var upperInfo = $('upperInfo');
+  var echoEl = $('amountEcho');
+  var lowerOut = $('lowerOut');
+  var lastLower = '';
+
+  function update() {
+    var res = toUpper(
+      amountEl.value,
+      $('addPrefix').checked,
+      $('tailWord').value,
+      $('ceilMode').checked
+    );
+    if (!res) {
+      upperOut.value = '';
+      upperInfo.textContent = '';
+      echoEl.textContent = amountEl.value ? '无法识别，请输入数字金额（可带 ¥ 和逗号）' : '—';
+      return;
+    }
+    upperOut.value = res.text;
+    upperInfo.textContent = amountEl.value ? '（已生成）' : '';
+    echoEl.textContent = '对应小写：' + res.echo;
+  }
+
+  function copyText(text, btn, label) {
+    if (!text) return;
+    var old = btn.textContent;
+    var done = function () {
+      btn.textContent = '已复制';
+      setTimeout(function () { btn.textContent = old; }, 1200);
+    };
+    var legacy = function () {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { if (document.execCommand('copy')) done(); } catch (e) { /* 忽略 */ }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, legacy);
+    } else {
+      legacy();
+    }
+  }
+
+  amountEl.addEventListener('input', update);
+  ['addPrefix', 'ceilMode', 'tailWord'].forEach(function (id) {
+    $(id).addEventListener('change', update);
+  });
+
+  Array.prototype.slice.call(document.querySelectorAll('#quick button')).forEach(function (b) {
+    b.addEventListener('click', function () {
+      amountEl.value = b.getAttribute('data-v');
+      update();
+      amountEl.focus();
+    });
+  });
+
+  $('clearAmount').addEventListener('click', function () {
+    amountEl.value = '';
+    update();
+    amountEl.focus();
+  });
+
+  $('copyUpper').addEventListener('click', function () {
+    copyText(upperOut.value, this, '复制大写');
+  });
+
+  $('toLowerBtn').addEventListener('click', function () {
+    var res = toLower($('upperInput').value);
+    if (res === null) {
+      lastLower = '';
+      lowerOut.className = 'lower-result err';
+      lowerOut.textContent = '无法识别，请检查大写金额写法';
+      return;
+    }
+    lastLower = res;
+    lowerOut.className = 'lower-result';
+    lowerOut.textContent = res;
+  });
+
+  $('upperInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') $('toLowerBtn').click();
+  });
+
+  $('copyLower').addEventListener('click', function () {
+    copyText(lastLower, this, '复制小写');
+  });
+
+  update();
+})();
+</script>
+
+<!-- 全局顶栏：品牌 + 搜索 + 全部工具，滚动时常驻 -->
+<script src="assets/tools.js" defer></script>
+<script src="assets/nav.js" defer></script>
+</body>
+</html>

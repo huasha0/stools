@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>列表处理 · 拆开 / 清洗 / 拼回</title>
+<link rel="stylesheet" href="assets/nav.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 48px;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    background: #f5f6f8; color: #333;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 22px 16px 0; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .sub { margin: 0 0 18px; color: #777; font-size: 13px; }
+  .presets {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 14px;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .presets .lbl { font-size: 13px; color: #666; margin-right: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 14px; }
+  .card {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px 16px;
+  }
+  .card h2 {
+    font-size: 14px; margin: 0 0 10px; color: #1a56b0;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .card h2 .count { color: #999; font-weight: normal; font-size: 12px; }
+  textarea {
+    width: 100%; min-height: 150px; resize: vertical; font: inherit; font-size: 13px;
+    padding: 8px 10px; border: 1px solid #c5ccd6; border-radius: 6px;
+    font-family: Consolas, monospace; line-height: 1.55;
+  }
+  textarea:focus, input:focus, select:focus { outline: 2px solid #cfe0f7; border-color: #4a90d9; }
+  #output { background: #f0f9f0; border-color: #d8ecd8; }
+  .hint { color: #999; font-size: 12px; margin-top: 6px; line-height: 1.6; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; }
+  .opts.col { flex-direction: column; gap: 8px; }
+  .opts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .field > span { flex: 0 0 84px; color: #666; }
+  .field input[type="text"], .field select {
+    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 5px 8px;
+    border: 1px solid #c5ccd6; border-radius: 6px; background: #fff;
+  }
+  #customSep { width: 100%; margin-top: 10px; font: inherit; font-size: 13px; padding: 5px 8px;
+    border: 1px solid #c5ccd6; border-radius: 6px; }
+  #customSep:disabled { background: #f5f5f5; color: #aaa; }
+  button {
+    font: inherit; font-size: 13px; padding: 5px 14px; border-radius: 6px;
+    border: 1px solid #c5ccd6; background: #fff; color: #333; cursor: pointer;
+  }
+  button:hover { background: #f0f3f7; }
+  .presets button.active { background: #e8f0fe; border-color: #4a90d9; color: #1a56b0; font-weight: bold; }
+  .btns { display: flex; gap: 8px; margin-bottom: 10px; }
+  @media (max-width: 820px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>列表处理</h1>
+  <p class="sub">拆开 → 清洗 → 拼回，三步流水线，结果实时预览。全部在本地浏览器完成，数据不出机器。</p>
+
+  <div class="presets" id="presets">
+    <span class="lbl">输出预设</span>
+    <button data-preset="sql">SQL IN ('a','b','c')</button>
+    <button data-preset="sqlnum">SQL IN (数字) (1,2,3)</button>
+    <button data-preset="js">JS 数组 ['a','b','c']</button>
+    <button data-preset="csv">逗号分隔 a,b,c</button>
+    <button data-preset="lines">每行一个 一行一项</button>
+    <button data-preset="md">Markdown 列表 - a</button>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <section class="card">
+        <h2>1. 输入</h2>
+        <textarea id="input" placeholder="把一列数据粘贴到这里，例如从 Excel 复制一列订单号……"></textarea>
+        <div class="hint" id="inputStats">0 字符</div>
+      </section>
+
+      <section class="card">
+        <h2>2. 拆开</h2>
+        <div class="opts">
+          <label><input type="radio" name="split" value="line" checked>按行</label>
+          <label><input type="radio" name="split" value="comma">按逗号（中英文）</label>
+          <label><input type="radio" name="split" value="space">按空白</label>
+          <label><input type="radio" name="split" value="custom">自定义</label>
+        </div>
+        <input type="text" id="customSep" placeholder="自定义分隔符，如 | 或 ;" disabled>
+      </section>
+
+      <section class="card">
+        <h2>3. 清洗</h2>
+        <div class="opts col">
+          <label><input type="checkbox" id="cTrim" checked>去首尾空格</label>
+          <label><input type="checkbox" id="cEmpty" checked>去空行 / 空项</label>
+          <label><input type="checkbox" id="cDedupe" checked>去重</label>
+          <label><input type="checkbox" id="cSort">排序（自然序，item2 在 item10 前）</label>
+        </div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <h2>4. 拼回</h2>
+        <div class="field">
+          <span>每项加引号</span>
+          <select id="quote">
+            <option value="">不加引号</option>
+            <option value="'">单引号 '</option>
+            <option value="&quot;">双引号 "</option>
+            <option value="`">反引号 `</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>每项前后缀</span>
+          <input type="text" id="prefix" placeholder="前缀，如 - ">
+          <input type="text" id="suffix" placeholder="后缀，如 ;">
+        </div>
+        <div class="field">
+          <span>连接符</span>
+          <select id="sep">
+            <option value="commaSpace">逗号 + 空格</option>
+            <option value="comma">逗号</option>
+            <option value="nl">换行</option>
+            <option value="pipe">竖线</option>
+            <option value="space">空格</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>整体包裹</span>
+          <input type="text" id="wrapL" placeholder="前，如 (">
+          <input type="text" id="wrapR" placeholder="后，如 )">
+        </div>
+        <div class="hint">单引号按 SQL 惯例翻倍（O''Brien）；双引号和反引号按 JS 惯例加反斜杠（\"）。两套惯例不通用，拼 JS 字符串时请自行确认。</div>
+      </section>
+
+      <section class="card">
+        <h2>5. 结果<span class="count" id="count"></span></h2>
+        <div class="btns">
+          <button id="copyBtn">复制结果</button>
+          <button id="dlBtn">下载 .txt</button>
+        </div>
+        <textarea id="output" readonly placeholder="结果会实时出现在这里"></textarea>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var inputEl = $('input');
+  var outputEl = $('output');
+  var customSepEl = $('customSep');
+  var countEl = $('count');
+  var inputStatsEl = $('inputStats');
+
+  var SEPS = { commaSpace: ', ', comma: ',', nl: '\n', pipe: ' | ', space: ' ' };
+
+  // 预设只改「拼回」的格式，不碰拆开与清洗
+  var PRESETS = {
+    sql:    { quote: "'",  prefix: '',  suffix: '', sep: 'commaSpace', wrapL: '(', wrapR: ')' },
+    sqlnum: { quote: '',   prefix: '',  suffix: '', sep: 'commaSpace', wrapL: '(', wrapR: ')' },
+    js:     { quote: '"',  prefix: '',  suffix: '', sep: 'commaSpace', wrapL: '[', wrapR: ']' },
+    csv:    { quote: '',   prefix: '',  suffix: '', sep: 'commaSpace', wrapL: '',  wrapR: ''  },
+    lines:  { quote: '',   prefix: '',  suffix: '', sep: 'nl',         wrapL: '',  wrapR: ''  },
+    md:     { quote: '',   prefix: '- ', suffix: '', sep: 'nl',        wrapL: '',  wrapR: ''  }
+  };
+
+  var collator = new Intl.Collator('zh-Hans-CN', { numeric: true, sensitivity: 'variant' });
+
+  function readState() {
+    return {
+      split: document.querySelector('input[name="split"]:checked').value,
+      custom: customSepEl.value,
+      trim: $('cTrim').checked,
+      empty: $('cEmpty').checked,
+      dedupe: $('cDedupe').checked,
+      sort: $('cSort').checked,
+      quote: $('quote').value,
+      prefix: $('prefix').value,
+      suffix: $('suffix').value,
+      sep: SEPS[$('sep').value],
+      wrapL: $('wrapL').value,
+      wrapR: $('wrapR').value
+    };
+  }
+
+  function splitText(text, st) {
+    if (!text) return [];
+    if (st.split === 'line') return text.split(/\r\n|\r|\n/);
+    if (st.split === 'comma') return text.split(/[,，]/);
+    if (st.split === 'space') return text.split(/\s+/);
+    if (st.split === 'custom') return st.custom ? text.split(st.custom) : [text];
+    return [text];
+  }
+
+  function cleanItems(items, st) {
+    var out = items;
+    if (st.trim) out = out.map(function (s) { return s.trim(); });
+    if (st.empty) out = out.filter(function (s) { return s.length > 0; });
+    if (st.dedupe) {
+      var seen = new Set();
+      out = out.filter(function (s) {
+        if (seen.has(s)) return false;
+        seen.add(s);
+        return true;
+      });
+    }
+    if (st.sort) out = out.slice().sort(function (a, b) { return collator.compare(a, b); });
+    return out;
+  }
+
+  function quoteItem(s, q) {
+    if (q === "'") return "'" + s.replace(/'/g, "''") + "'";
+    if (q === '"') return '"' + s.replace(/"/g, '\\"') + '"';
+    if (q === '`') return '`' + s.replace(/`/g, '\\`') + '`';
+    return s;
+  }
+
+  function joinItems(items, st) {
+    var parts = items.map(function (it) {
+      return st.prefix + quoteItem(it, st.quote) + st.suffix;
+    });
+    return st.wrapL + parts.join(st.sep) + st.wrapR;
+  }
+
+  function update() {
+    var st = readState();
+    var items = cleanItems(splitText(inputEl.value, st), st);
+    outputEl.value = joinItems(items, st);
+    countEl.textContent = items.length ? '（共 ' + items.length + ' 项）' : '';
+    inputStatsEl.textContent = inputEl.value.length + ' 字符';
+  }
+
+  function clearPresetActive() {
+    Array.prototype.slice.call(document.querySelectorAll('#presets button'))
+      .forEach(function (b) { b.classList.remove('active'); });
+  }
+
+  function applyPreset(name) {
+    var p = PRESETS[name];
+    if (!p) return;
+    $('quote').value = p.quote;
+    $('prefix').value = p.prefix;
+    $('suffix').value = p.suffix;
+    $('sep').value = p.sep;
+    $('wrapL').value = p.wrapL;
+    $('wrapR').value = p.wrapR;
+    clearPresetActive();
+    document.querySelector('#presets button[data-preset="' + name + '"]').classList.add('active');
+  }
+
+  Array.prototype.slice.call(document.querySelectorAll('#presets button'))
+    .forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        applyPreset(btn.getAttribute('data-preset'));
+        update();
+      });
+    });
+
+  // 手动改「拼回」参数时取消预设高亮，并立即刷新结果
+  ['quote', 'prefix', 'suffix', 'sep', 'wrapL', 'wrapR'].forEach(function (id) {
+    var el = $(id);
+    el.addEventListener('input', function () { clearPresetActive(); update(); });
+    el.addEventListener('change', function () { clearPresetActive(); update(); });
+  });
+
+  // 拆开方式切换：自定义分隔符输入框可编辑
+  Array.prototype.slice.call(document.querySelectorAll('input[name="split"]'))
+    .forEach(function (r) {
+      r.addEventListener('change', function () {
+        if (!r.checked) return;
+        customSepEl.disabled = r.value !== 'custom';
+        if (r.value === 'custom') customSepEl.focus();
+        update();
+      });
+    });
+
+  inputEl.addEventListener('input', update);
+  customSepEl.addEventListener('input', update);
+  ['cTrim', 'cEmpty', 'cDedupe', 'cSort'].forEach(function (id) {
+    $(id).addEventListener('change', update);
+  });
+
+  $('copyBtn').addEventListener('click', function () {
+    var btn = this;
+    var text = outputEl.value;
+    var done = function () {
+      btn.textContent = '已复制';
+      setTimeout(function () { btn.textContent = '复制结果'; }, 1200);
+    };
+    var legacy = function () {
+      outputEl.select();
+      try { if (document.execCommand('copy')) done(); } catch (e) { /* 忽略 */ }
+      window.getSelection().removeAllRanges();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, legacy);
+    } else {
+      legacy();
+    }
+  });
+
+  $('dlBtn').addEventListener('click', function () {
+    var blob = new Blob([outputEl.value], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = '列表结果.txt';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 0);
+  });
+
+  applyPreset('sql');
+  update();
+})();
+</script>
+
+<!-- 全局顶栏：品牌 + 搜索 + 全部工具，滚动时常驻 -->
+<script src="assets/tools.js" defer></script>
+<script src="assets/nav.js" defer></script>
+</body>
+</html>
